@@ -1,0 +1,32 @@
+For the fast implementation of the algorithm generating the LPS-array, here
+follows a quick description.
+
+Assume:
+seq := {CAGCATGGTATCACAGCAGAG}
+
+We define n=|seq|=21
+
+We define length, the length of the previous LPS as length = 0.
+
+We then iterate over all i in [1:n];
+
+If length>0 (An LPS has been found) and
+the char at i != the char at the index of the previous LPS (seq[i] = seq[length]),
+then we set length to the previous LPS-value (lps[length-1])
+
+CAGCATGGTATCACAGCAGAG
+
+Begin)
+
+Length = 0
+[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+
+1)
+Length = 3
+lps = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3]
+
+2)
+
+Length = 1
+lps = [0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3]
+
