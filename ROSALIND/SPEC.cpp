@@ -44,7 +44,7 @@ bool within_tolerance(double a, double b, double tolerance){
     };
 
     return false;
-}
+};
 
 int read_data(std::string& fname, std::vector<double>& data) {
 
