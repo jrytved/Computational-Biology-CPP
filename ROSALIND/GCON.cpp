@@ -17,6 +17,9 @@ be i*gap_penalty or j*gap_penalty respectively, but just equal to the gap penalt
 
 2) When considering the max score for each cell, we should only add the gap penalty if a new gap is being opened.
    That is, if the previous best score came from opening a gap, we don't need to penalize further extension of the gap.
+
+   We can implement this by considering the max. score across the whole row or column (minus the gap penalty) when considering
+   whether to introduce a gap.
 */
 
 #include <iostream>
@@ -26,18 +29,23 @@ be i*gap_penalty or j*gap_penalty respectively, but just equal to the gap penalt
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <iomanip> // For std::setw
 
 // Utility Function To Print Score And Backtracking Matrix
 
-void print_mat(const std::vector<std::vector<int>> &mat){
-
-    for(auto col : mat){
-        for(auto val : col) {
-            std::printf("%4d ", val);
-        };
+template <typename T>
+void print_mat(const std::vector<std::vector<T>> &mat) {
+    for (const auto &row : mat) {
+        for (const auto &val : row) {
+            // Adjust formatting based on type
+            if constexpr (std::is_same<T, char>::value) {
+                std::cout << std::setw(4) << val << ' '; // Align characters
+            } else {
+                std::cout << std::setw(4) << val << ' '; // Align numbers
+            }
+        }
         std::cout << std::endl;
-    };
-
+    }
 };
 
 // Hash Map For Converting A Residue To It's Index in The Blosum62 Scoring Matrix
@@ -99,6 +107,7 @@ int main() {
     std::vector<std::vector<int>> score_mat(n+1, std::vector<int>(m+1));
     std::vector<std::vector<char>> backtrack_mat(n+1, std::vector<char>(m+1));
 
+    // Initalize Scoring Matrix With Constant Gap Penalty
     for(int i = 1; i<n+1; i++){
         score_mat[i][0] = -(gap_penalty);
     };
@@ -107,9 +116,26 @@ int main() {
         score_mat[0][j] = -(gap_penalty);
     };
 
-    std::printf("INITIALIZED SCORING MATRIX\n\n");
+    // Initialize Backtracking Matrix with Chars Corresponding To Constant Gap Penalty
+
+        for(int i = 1; i<n+1; i++){
+        backtrack_mat[i][0] = 'U';
+    };
+
+    for(int j = 1; j<m+1; j++){
+        backtrack_mat[0][j] = 'L';
+    };
+
+    backtrack_mat[0][0] = 'F';
+
+    // Output The Initialized Scoring Matrix
+
+    std::printf("INITIALIZED SCORING AND BT MATRIX\n\n");
 
     print_mat(score_mat);
+    std::cout << std::endl;
+
+    print_mat(backtrack_mat);
     std::cout << std::endl;
 
 
@@ -127,14 +153,61 @@ int main() {
             int s_idx = residueToIndex[s_char];
             int t_idx = residueToIndex[t_char];
 
+            std::vector<int> scores(3);
+                    
             // Scores for the three courses of action: align, gap s and gap t.
-            int aln_score = score_mat[i-1][j-1]+blosum62[s_idx][t_idx];
-            int gap_t_score = score_mat[i-1][j] - gap_penalty;   // Should be changed to max of vals from 0 up to i-1 minus gap
-            int gap_s_score = score_mat[i][j-1] - gap_penalty;  // Should be changed to max of vals from 0 up to j-1  minus gap
+            // Because we are now workign with a constant gap-penalty, when considering the gapping of one or the other sequence,
+            // we need to consider the max of all scores along the row or column, minus the gap penalty, because we at the cost of one gap
+            // can gap an arbitrary number of positions.
 
-            int max_score = std::max(aln_score, std::max(gap_t_score, gap_s_score));
+            // Calculate Column Max and Row Max
 
+            int colmax { 0 };
+            int rowmax { 0 };
+
+            for(int k=0; k<i; k++) {
+                
+                (score_mat[k][j] > colmax)? colmax = score_mat[k][j]: colmax = colmax;
+
+            };
+
+            for(int k=0; k<j; k++) {
+                
+                (score_mat[i][k] > rowmax)? rowmax = score_mat[i][k]: rowmax = rowmax;
+
+            };
+
+            scores[0] = score_mat[i-1][j-1]+blosum62[s_idx][t_idx];
+            scores[1] = colmax - gap_penalty;   // Should be changed to max of vals from 0 up to i-1 minus gap
+            scores[2] = rowmax - gap_penalty;  // Should be changed to max of vals from 0 up to j-1  minus gap
+
+            // Find el. of score vector with max. integer value
+            auto max_it = std::max_element(scores.begin(), scores.end());
+            int max_index = std::distance(scores.begin(), max_it);
+            int max_score = scores[max_index];
+
+            char bt_char;
+            
+            // Find the appropriate character for the backtracking matrix.
+            switch(max_index){
+                case 0:
+                    bt_char = 'D';
+                    break;
+                case 1:
+                    bt_char = 'U';
+                    break;
+                case 2:
+                    bt_char = 'L';
+                    break;
+                default:
+                    std::cerr << "Reached max_index > 3 during backtrack!\n";
+            };
+
+            // Update Score Matrix
             score_mat[i][j] = max_score;
+
+            // Update Backtracking Matrix
+            backtrack_mat[i][j] = bt_char;
 
         };
     };
@@ -142,10 +215,51 @@ int main() {
     print_mat(score_mat);
     std::cout << std::endl;
 
+    print_mat(backtrack_mat);
+    std::cout << std::endl;
+
     std::printf("THE MAX ATTAINABLE SCORE IS {%i}.\n\n", score_mat[n][m]);
 
+    std::printf("COMMENCING BACKTRACKING TO RECONSTRUCT ALIGNMENT\n\n");
 
 
+    // Init (i,j) to refer to the lower-right corner of the bactracking matrix (n, m).
+    int i { n };
+    int j { m };
+
+    // Two strings to construct the aligned sequences.
+    std::string s_aln = "";
+    std::string t_aln = "";
+
+    // While we have not reached (0, 0) of the bactracking matrix
+    while ((i > 0) or (j > 0)) {
+    switch (backtrack_mat[i][j]) {
+        case 'D':
+            s_aln += s[i-1];
+            t_aln += t[j-1];
+            --i;
+            --j;
+            break;
+        case 'U':
+            s_aln += s[i-1];
+            t_aln += '-';
+            --i;
+            break;
+        case 'L':
+            s_aln += '-';
+            t_aln += t[j-1];
+            --j;
+            break;
+        default:
+            std::cerr << "Encountered non-recognized character in backtrack matrix: " << backtrack_mat[i][j] << std::endl;
+    }
+}
+    std::reverse(s_aln.begin(), s_aln.end());
+    std::reverse(t_aln.begin(), t_aln.end());
+
+    std::printf("ALIGNED STRINGS\n\n");
+    std::printf("%s\n", s_aln.c_str());
+    std::printf("%s\n", t_aln.c_str());
 
     return 0;
 }
